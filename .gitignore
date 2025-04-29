@@ -1,0 +1,23 @@
+# Entorno virtual
+.venv/
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+
+# PyCharm
+.idea/
+*.iml
+
+# Logs y databases
+*.log
+*.sqlite
+*.db
+
+# Archivos generados
+dist/
+build/
+
