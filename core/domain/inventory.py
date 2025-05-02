@@ -4,6 +4,7 @@ import re
 
 
 class LoteSII(BaseModel):
+    id: int
     sku: str = Field(..., pattern=r'CL-\d{4}-[A-Z]{3}$')
     cantidad: int = Field(..., gt=0)
     costo_unitario: float = Field(..., gt=0)

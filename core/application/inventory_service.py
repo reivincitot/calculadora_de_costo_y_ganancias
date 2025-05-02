@@ -1,148 +1,132 @@
+from typing import Dict
+from datetime import datetime
+from functools import lru_cache
 from core.domain.inventory import LoteSII, MovimientoInventario
 from core.infrastructure.security.security_manager import SecurityManager
 from core.infrastructure.database.postgres_manager import DatabaseManager
-from typing import List, Dict
-from datetime import datetime
 
 
-class FIFOInventoryManager:
-    def __init__(self):
-        self.security = SecurityManager()
-        self.lotes: List[LoteSII] = []
-        self.historial: List[MovimientoInventario] = []
-
-    def registrar_lote(self, lote_data: Dict) -> LoteSII:
-        """Registra nuevo Lote con validación completa"""
-        lote = LoteSII(**lote_data)
-        self.lotes.append(lote)
-        self._registrar_movimiento('ENTRADA', lote.cantidad,
-                                   lote.costo_unitario * lote.cantidad,
-                                   lote.documento_relacionado)
-        return lote
-
-    def consumir_stock(self, cantidad: int, usuario: str, documento: str) -> float:
-        """Ejecuta consumo FIFO con trazabilidad"""
-        if cantidad <= 0:
-            raise ValueError("Cantidad debe ser positiva")
-
-        costo_total = 0.0
-        cantidad_restante = cantidad
-
-        # Ordenar por fecha más antigua primero
-        sorted_lotes = sorted(self.lotes, key=lambda x: x.fecha_ingreso)
-
-        for lote in sorted_lotes:
-            if cantidad_restante <= 0:
-                break
-
-            disponible = lote.cantidad
-            if disponible <= 0:
-                continue
-
-            consumir = min(disponible, cantidad_restante)
-            costo_total += consumir * lote.costo_unitario
-            lote.cantidad -= consumir
-            cantidad_restante = consumir
-
-            # Registrar movimiento parcial
-            self._registrar_movimiento(
-                tipo='SALIDA',
-                cantidad=consumir,
-                costo_total=consumir * lote.costo_unitario,
-                referencia=documento,
-                usuario=usuario
-            )
-
-            if cantidad_restante > 0:
-                raise ValueError(f"Stock insuficiente. Faltan {cantidad_restante} unidades")
-
-            # Eliminar lotes vacíos
-            self.lotes = [l for l in self.lotes if l.cantidad > 0]
-
-            return costo_total
-
-        def _registrar_movimiento(self, tipo: str, cantidad: int,
-                                  costo_total: float, referencia: str, usuario: str):
-            """Registro de auditoría ISO 9001"""
-            movimiento = MovimientoInventario(
-                tipo=tipo,
-                cantidad=cantidad,
-                costo_total=costo_total,
-                referencia=referencia,
-                usuario=usuario
-            )
-            self.historial.append(movimiento)
-
-        def generar_reporte_sii(self) -> Dict:
-            """Genera reporte en formato compatible con SII"""
-            reporte = {
-                "lotes": [l.dict() for l in self.lotes],
-                "movimientos": [m.dict() for m in self.historial],
-                "fecha_reporte": datetime.now().isoformat(),
-                "sello_digital": self._generar_sello_digital()
-            }
-            reporte["sello_digital"] = self.security.generar_sello_digital(reporte)
-            return reporte
-        def _generar_sello_digital(self) -> str:
-            """Generar sello para validación integridad (ISO 27001)"""
-
-
-class InventoryManager:
+class InventoryService:
     def __init__(self):
         self.db = DatabaseManager()
+        self.security = SecurityManager()
 
-    def add_batch(self, sku: str, quantity: int, unit_cost: float, doc: str = None):
+    # OPERACIONES PRINCIPALES
+    def add_batch(self, sku: str, quantity: int, unit_cost: float, doc: str = None) -> LoteSII:
+        """Registra nuevo lote con costo unitario"""
         with self.db.get_cursor() as cur:
             cur.execute("""
-            INSERT INTO lotes (sku, cantidad, costo_unitario, documento_asociado)
-            VALUES (%s, %s, %s, %s)
-            RETURNING id
+                INSERT INTO lotes (sku, cantidad, costo_unitario, documento_asociado)
+                VALUES (%s, %s, %s, %s)
+                RETURNING id, fecha_ingreso
             """, (sku, quantity, unit_cost, doc))
-            lote_id = cur.fetchone()['id']
 
-            # Registrar movimiento inicial
-            cur.execute("""
-                INSERT INTO movimientos (lote_id, tipo_movimiento, cantidad)
-                VALUES(%s, 'ENTRADA', %s)
-                """, (lote_id, quantity)
+            lote_data = cur.fetchone()
+            lote = LoteSII(
+                id=lote_data['id'],
+                sku=sku,
+                cantidad=quantity,
+                costo_unitario=unit_cost,
+                fecha_ingreso=lote_data['fecha_ingreso'],
+                documento_relacionado=doc
             )
 
-    def consume(self, sku: str, quantity: int)-> float:
+            self._registrar_movimiento_db(cur, lote.id, 'ENTRADA', quantity)
+            self.get_stock.cache_clear()
+            return lote
+
+    def consume(self, sku: str, quantity: int, user: str = "system", doc: str = None) -> float:
+        """Consume stock usando FIFO y retorna costo total"""
         total_cost = 0.0
         remaining = quantity
 
         with self.db.get_cursor() as cur:
-        #Obtener lotes disponibles ordenados por fecha (FIFO)
-        cur.execute("""
-            SELECT id, cantidad, costo_unitario
-            FROM lotes
-            WHERE sku= %s AND cantidad > 0
-            ORDER BY fecha_ingreso
-        """, (sku,))
-
-        for lote in cur.fetchall():
-            if remaining <= 0:
-                break
-
-            disponible = lote ['cantidad']
-            usar = min(disponible, remaining)
-
-            # Actualizar lote
             cur.execute("""
-            UPDATE lotes
-            SET cantidad = cantidad - %s
-            WHERE id = %s
-            """, (usar, lote['id']))
+                SELECT id, cantidad, costo_unitario 
+                FROM lotes 
+                WHERE sku = %s AND cantidad > 0 
+                ORDER BY fecha_ingreso
+                FOR UPDATE
+            """, (sku,))
 
-            # Registrar movimiento
+            for lote in cur.fetchall():
+                if remaining <= 0:
+                    break
+
+                disponible = lote['cantidad']
+                usar = min(disponible, remaining)
+
+                # Actualizar lote
+                cur.execute("""
+                    UPDATE lotes 
+                    SET cantidad = cantidad - %s 
+                    WHERE id = %s
+                """, (usar, lote['id']))
+
+                # Registrar movimiento
+                self._registrar_movimiento_db(cur, lote['id'], 'SALIDA', usar, user, doc)
+
+                total_cost += usar * lote['costo_unitario']
+                remaining -= usar
+
+            if remaining > 0:
+                raise ValueError(f"Stock insuficiente para {sku}. Faltan {remaining} unidades")
+
+            self.get_stock.cache_clear()
+            return total_cost
+
+    # CONSULTAS
+    @lru_cache(maxsize=100)
+    def get_stock(self, sku: str) -> int:
+        """Stock disponible por SKU (con cache)"""
+        with self.db.get_cursor() as cur:
             cur.execute("""
-                INSERT INTO movimientos (lote_id, tipo_movimiento, cantidad)
-                VALUES (%s, 'SALIDA', %s)
-            """, (lote['id'], usar))
+                SELECT COALESCE(SUM(cantidad), 0)
+                FROM lotes
+                WHERE sku = %s AND cantidad > 0
+            """, (sku,))
+            return cur.fetchone()[0]
 
-            total_cost += usar * lote['costo_unitario']
-            remaining -= usar
-        if remaining > 0:
-            raise ValueError(f"Stock insuficiente para SKU {sku}. FALTAN {remaining} unidades")
+    def stock_value(self) -> float:
+        """Valor total del inventario (costo)"""
+        with self.db.get_cursor() as cur:
+            cur.execute("""
+                SELECT COALESCE(SUM(cantidad * costo_unitario), 0.0)
+                FROM lotes
+                WHERE cantidad > 0
+            """)
+            return cur.fetchone()[0]
 
-        return total_cost
+    # HELPERS
+    def _registrar_movimiento_db(self, cursor, lote_id: int, tipo: str,
+                                 cantidad: int, user: str = None, doc: str = None):
+        cursor.execute("""
+            INSERT INTO movimientos (lote_id, tipo_movimiento, cantidad, usuario, documento)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (lote_id, tipo, cantidad, user, doc))
+
+    # REPORTES
+    def generar_reporte_sii(self, sku: str) -> Dict:
+        """Genera reporte con sello digital válido"""
+        with self.db.get_cursor() as cur:
+            cur.execute("""
+                SELECT id, sku, cantidad, costo_unitario, fecha_ingreso, documento_asociado
+                FROM lotes
+                WHERE sku = %s
+            """, (sku,))
+            lotes = [LoteSII(**row) for row in cur.fetchall()]
+
+            cur.execute("""
+                SELECT tipo_movimiento, cantidad, usuario, documento, fecha
+                FROM movimientos
+                WHERE lote_id IN %s
+            """, (tuple(l.id for l in lotes),))
+
+            reporte = {
+                "lotes": [l.model_dump() for l in lotes],
+                "movimientos": [MovimientoInventario.model_validate(row).model_dump() for row in cur.fetchall()],
+                "fecha_reporte": datetime.now().isoformat()
+            }
+
+            reporte["sello_digital"] = self.security.generar_sello_digital(reporte)
+            return reporte
