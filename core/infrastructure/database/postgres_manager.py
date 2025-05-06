@@ -31,19 +31,22 @@ class DatabaseManager:
     def _create_tables(self):
         with self.get_cursor() as cur:
             cur.execute("""
-            CREATE TABLE OF NOT EXiSTS lotes (
-            id SERIAL PRIMARY KEY,
-            sku VARCHAR(20) NOT NULL,
-            cantidad INTEGER NOT NULL,
-            costo_unitario Numeric(15,2),
-            fecha_ingreso TIMESTAMP DEFAULT NOW(),
-            documento_asociado VARCHAR(20)
-            );
-            CREATE TABLE IF NOT EXISTS movimientos (
-            id SERIAL PRIMARY KEY,
-            lote_id INTEGER REFERENCES lotes(id),
-            tipo_movimiento VARCHAR(10) CHECK (tipo_movimiento IN ('ENTRADA', 'SALIDA')),
-            cantidad INTEGER NOT NULL,
-            fecha TIMESTAMP DEFAULT NOW()
-            );
+                CREATE TABLE IF NOT EXISTS lotes (
+                    id SERIAL PRIMARY KEY,
+                    sku VARCHAR(20) NOT NULL,
+                    cantidad INTEGER NOT NULL CHECK (cantidad >= 0),
+                    costo_unitario NUMERIC(15,2) NOT NULL,
+                    fecha_ingreso TIMESTAMP DEFAULT NOW(),
+                    documento_asociado VARCHAR(20)
+                );
+
+                CREATE TABLE IF NOT EXISTS movimientos (
+                    id SERIAL PRIMARY KEY,
+                    lote_id INTEGER REFERENCES lotes(id),
+                    tipo_movimiento VARCHAR(10) NOT NULL CHECK (tipo_movimiento IN ('ENTRADA', 'SALIDA')),
+                    cantidad INTEGER NOT NULL,
+                    usuario VARCHAR(50),
+                    documento VARCHAR(20),
+                    fecha TIMESTAMP DEFAULT NOW()
+                );
             """)

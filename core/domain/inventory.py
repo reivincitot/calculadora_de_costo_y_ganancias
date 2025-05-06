@@ -24,4 +24,3 @@ class MovimientoInventario(BaseModel):
     costo_total: float
     fecha: datetime = Field(default_factory=datetime.now)
     referencias: str  # Número de documento tributario
-

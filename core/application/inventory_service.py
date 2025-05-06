@@ -37,6 +37,9 @@ class InventoryService:
 
     def consume(self, sku: str, quantity: int, user: str = "system", doc: str = None) -> float:
         """Consume stock usando FIFO y retorna costo total"""
+        if self.get_stock(sku) < quantity:
+            raise ValueError(f"Stock insuficiente para {sku}. Stock actual: {self.get_stock(sku)}")
+
         total_cost = 0.0
         remaining = quantity
 
@@ -63,14 +66,14 @@ class InventoryService:
                     WHERE id = %s
                 """, (usar, lote['id']))
 
-                # Registrar movimiento
-                self._registrar_movimiento_db(cur, lote['id'], 'SALIDA', usar, user, doc)
+                new_quantity = cur.fetchone()['cantidad']
+                if new_quantity == 0:
+                    cur.execute("DELETE FROM lotes WHERE id = %s", (lote['id'],))
 
+                # Registrar movimiento y acumular costo
+                self._registrar_movimiento_db(cur, lote['id'], 'SALIDA', usar, user, doc)
                 total_cost += usar * lote['costo_unitario']
                 remaining -= usar
-
-            if remaining > 0:
-                raise ValueError(f"Stock insuficiente para {sku}. Faltan {remaining} unidades")
 
             self.get_stock.cache_clear()
             return total_cost
@@ -81,11 +84,11 @@ class InventoryService:
         """Stock disponible por SKU (con cache)"""
         with self.db.get_cursor() as cur:
             cur.execute("""
-                SELECT COALESCE(SUM(cantidad), 0)
+                SELECT COALESCE(SUM(cantidad), 0) AS stock
                 FROM lotes
                 WHERE sku = %s AND cantidad > 0
             """, (sku,))
-            return cur.fetchone()[0]
+            return int(cur.fetchone()['stock'])
 
     def stock_value(self) -> float:
         """Valor total del inventario (costo)"""
@@ -130,3 +133,12 @@ class InventoryService:
 
             reporte["sello_digital"] = self.security.generar_sello_digital(reporte)
             return reporte
+
+    def get_average_cost(self, sku: str) -> float:
+        with self.db.get_cursor() as cur:
+            cur.execute("""
+                SELECT AVG(costo_unitario) as avg_cost
+                FROM lotes
+                WHERE sku = %s AND cantidad > 0
+            """, (sku,))
+            return cur.fetchone()['avg_cost'] or 0.0

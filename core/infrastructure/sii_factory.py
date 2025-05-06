@@ -1,5 +1,5 @@
 import os
-from .security import SIISecurityManager
+from core.infrastructure.security.sii_security_manager import SIISecurityManager
 from ..application.sii_integration import SIIProduccion, SIIDesarrollo
 
 

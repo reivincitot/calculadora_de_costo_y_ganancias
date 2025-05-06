@@ -1,13 +1,12 @@
 import tkinter as tk
-from tkinter import ttk
-from core.application.inventory_service import InventoryManager
-
+from tkinter import ttk, messagebox
+from core.application.inventory_service import InventoryService
 
 class InventoryUI(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Gestión de Inventario - CRM8102")
-        self.inventory = InventoryManager()
+        self.inventory = InventoryService()
         self._build_ui()
 
     def _build_ui(self):

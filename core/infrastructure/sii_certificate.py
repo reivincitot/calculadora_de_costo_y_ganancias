@@ -3,6 +3,7 @@ from cryptography.hazmat.backends import default_backend
 from getpass import getpass
 import os
 
+
 class SIICertificateLoader:
     def __init__(self):
         self.cert_path = os.getenv("SII_API_KEY", 'certificados/sii.p12')
@@ -10,10 +11,14 @@ class SIICertificateLoader:
 
     def load(self):
         """Carga certificado desde archivo .p12"""
-        with open(self.cert_path, "rb") as f:
-            return  pkcs12.load_key_and_certificates(
-                f.read(),
-                self.cert_pass.encode(),
-                backend=default_backend()
-            )
-        
+        try:
+            with open(self.cert_path, "rb") as f:
+                return pkcs12.load_key_and_certificates(
+                    f.read(),
+                    self.cert_pass.encode(),
+                    backend=default_backend()
+                )
+        except FileNotFoundError:
+            raise ValueError("Archivo de certificado no encontrado")
+        except ValueError:
+            raise ValueError("Contraseña incorrecta o certificado inválido")

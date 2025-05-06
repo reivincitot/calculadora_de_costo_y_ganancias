@@ -1,5 +1,4 @@
-from presentation.desktop.inventory_ui import InventoryUI
+from presentation.desktop.login_window import LoginWindow
 
 if __name__ == "__main__":
-    app = InventoryUI()
-    app.mainloop()
+    LoginWindow().mainloop()

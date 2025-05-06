@@ -12,14 +12,14 @@ class SIIDesarrollo(SIIAdapter):
     def enviar_documento(self, xml_data: str) -> dict:
         return {
             "status": "success",
-            "ambiente": "desrrollo",
+            "ambiente": "desarrollo",
             "track_id": "MOCK-123",
             "fecha": "2024-01-01",
             "sello": "SIMULADO"
         }
 
 class SIIProduccion(SIIAdapter):
-    """Implementeción real para producción"""
+    """Implementación real para producción"""
     def __init__(self, security_manager):
         self.security = security_manager
 
