@@ -32,9 +32,6 @@ class LoginWindow(tk.Tk):
 
         # Configuración de seguridad
         self.auth = AuthManager()
-        if not self.auth.admin_exists():
-            # Crear admin por defecto si no existe
-            self.auth.create_user('admin', 'admin123', 'admin')
 
     def _login(self):
         username = self.username_entry.get().strip()

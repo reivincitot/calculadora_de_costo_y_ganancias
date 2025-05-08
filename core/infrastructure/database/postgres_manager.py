@@ -31,6 +31,24 @@ class DatabaseManager:
     def _create_tables(self):
         with self.get_cursor() as cur:
             cur.execute("""
+                -- tabla de usuarios para login
+                CREATE TABLE IF NOT EXISTS usuarios (
+                    username VARCHAR(50) PRIMARY KEY,
+                    password_hash VARCHAR(64) NOT NULL,
+                    role VARCHAR(20) NOT NULL,
+                    salt VARCHAR(32) NOT NULL
+                );
+
+                -- tabla de access_log para auditoría
+                CREATE TABLE IF NOT EXISTS access_log (
+                    id SERIAL PRIMARY KEY,
+                    username VARCHAR(50) NOT NULL,
+                    success BOOLEAN NOT NULL,
+                    timestamp TIMESTAMP NOT NULL DEFAULT NOW(),
+                    FOREIGN KEY (username) REFERENCES usuarios(username)
+                );
+
+                -- tabla de lotes
                 CREATE TABLE IF NOT EXISTS lotes (
                     id SERIAL PRIMARY KEY,
                     sku VARCHAR(20) NOT NULL,
@@ -40,13 +58,30 @@ class DatabaseManager:
                     documento_asociado VARCHAR(20)
                 );
 
+                -- movimientos de inventario
                 CREATE TABLE IF NOT EXISTS movimientos (
                     id SERIAL PRIMARY KEY,
                     lote_id INTEGER REFERENCES lotes(id),
-                    tipo_movimiento VARCHAR(10) NOT NULL CHECK (tipo_movimiento IN ('ENTRADA', 'SALIDA')),
+                    tipo_movimiento VARCHAR(10) NOT NULL 
+                        CHECK (tipo_movimiento IN ('ENTRADA','SALIDA')),
                     cantidad INTEGER NOT NULL,
                     usuario VARCHAR(50),
                     documento VARCHAR(20),
                     fecha TIMESTAMP DEFAULT NOW()
                 );
+
+                -- tabla de productos base
+                CREATE TABLE IF NOT EXISTS productos (
+                    id SERIAL PRIMARY KEY,
+                    nombre VARCHAR(100) NOT NULL,
+                    material VARCHAR(50),
+                    grosor_mm NUMERIC(5,2),
+                    color VARCHAR(50),
+                    descripcion TEXT
+                );
+
+                -- columna para referenciar productos en lotes
+                ALTER TABLE lotes 
+                  ADD COLUMN IF NOT EXISTS producto_id 
+                    INTEGER REFERENCES productos(id);
             """)

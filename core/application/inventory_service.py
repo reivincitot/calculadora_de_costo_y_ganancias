@@ -4,12 +4,13 @@ from functools import lru_cache
 from core.domain.inventory import LoteSII, MovimientoInventario
 from core.infrastructure.security.security_manager import SecurityManager
 from core.infrastructure.database.postgres_manager import DatabaseManager
-
+from core.application.sku_generator import SKUGenerator
 
 class InventoryService:
     def __init__(self):
         self.db = DatabaseManager()
         self.security = SecurityManager()
+        self.sku_generator = SKUGenerator()
 
     # OPERACIONES PRINCIPALES
     def add_batch(self, sku: str, quantity: int, unit_cost: float, doc: str = None) -> LoteSII:
@@ -142,3 +143,10 @@ class InventoryService:
                 WHERE sku = %s AND cantidad > 0
             """, (sku,))
             return cur.fetchone()['avg_cost'] or 0.0
+
+    def registrar_lote_con_sku_auto(self, base_sku: str, quantity: int, unit_cost: float, doc: str = None) -> LoteSII:
+        """
+        Registra un nuevo lote generando automáticamente el SKU basado en una base (por ejemplo, 'MAT-ALU02').
+        """
+        nuevo_sku = self.sku_generator.generar_sku(base_sku)
+        return self.add_batch(nuevo_sku, quantity, unit_cost, doc)

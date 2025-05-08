@@ -36,7 +36,7 @@ class InventoryUI(tk.Tk):
     def add_batch(self):
         sku = self.sku_entry.get()
         quantity = int(self.quantity_spin.get())
-        unit_cost = 0.0 #Implementar entrada de costo
+        unit_cost = 0.0
 
         try:
             self.inventory.add_batch(sku, quantity, unit_cost)
