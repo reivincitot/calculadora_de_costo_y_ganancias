@@ -73,11 +73,13 @@ class DatabaseManager:
                 -- tabla de productos base
                 CREATE TABLE IF NOT EXISTS productos (
                     id SERIAL PRIMARY KEY,
+                    codigo_base VARCHAR(20) NOT NULL UNIQUE,
                     nombre VARCHAR(100) NOT NULL,
                     material VARCHAR(50),
                     grosor_mm NUMERIC(5,2),
                     color VARCHAR(50),
                     descripcion TEXT
+                    activo BOOLEAN NOT NULL DEFAULT TRUE
                 );
 
                 -- columna para referenciar productos en lotes

@@ -1,28 +1,31 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
-from core.application.inventory_service import InventoryService
+from tkinter import ttk, messagebox, simpledialog
+import psycopg
+from core.logger_config import logger
 from core.application.report_exporter import ReportExporter
-
+from core.application.inventory_service import InventoryService
+from presentation.desktop.product_manager import ProductManagerWindow
+from presentation.desktop.mvp_window_check_list import MVPChecklistWindow
 
 class MainWindow(tk.Tk):
     def __init__(self, user_role='operador'):
         super().__init__()
+        self.user_role = user_role
         self.service = InventoryService()
         self.title("Gestor de Inventario - CRM8102")
         self.geometry("800x600")
 
-        # Construcción de UI y menús
+        # Menú principal
         self._build_menu()
+        # Interfaz principal
         self._build_ui()
 
-        # Inicializar datos
+        # Carga inicial de datos y menú de usuario
         self._refresh_inventory()
         self._add_user_menu(user_role)
 
     def _build_menu(self):
-        """Configura la barra de menú superior"""
         self.menubar = tk.Menu(self)
-
         file_menu = tk.Menu(self.menubar, tearoff=0)
         file_menu.add_command(label="Salir", command=self.destroy)
         self.menubar.add_cascade(label="Archivo", menu=file_menu)
@@ -36,16 +39,23 @@ class MainWindow(tk.Tk):
         reports_menu.add_command(label="Generar PDF", command=self._generate_pdf)
         self.menubar.add_cascade(label="Reportes", menu=reports_menu)
 
-        self.config(menu=self.menubar)
+        # Menú productos
+        prod_menu = tk.Menu(self.menubar, tearoff=0)
+        self.menubar.add_cascade(label="Productos", menu=prod_menu)
+
+        if self.user_role == 'admin':
+            prod_menu.add_command(label="Gestionar Productos...", command=self._open_product_manager)
+        else:
+            prod_menu.add_command(label="Productos", state=tk.DISABLED)
 
     def _build_ui(self):
         main_container = ttk.Frame(self)
         main_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        # Búsqueda
+        # Búsqueda de SKU
         self._build_search_section(main_container)
 
-        # Registro y consumo
+        # Registro y consumo en un mismo frame
         input_frame = ttk.Frame(main_container)
         input_frame.grid(row=1, column=0, columnspan=2, sticky=tk.NSEW)
         self._build_registration_section(input_frame)
@@ -54,27 +64,109 @@ class MainWindow(tk.Tk):
         # Tabla de inventario
         self._build_inventory_table(main_container)
 
-        # Layout
         main_container.columnconfigure(0, weight=1)
         main_container.rowconfigure(1, weight=1)
-
-    def _build_search_section(self, parent):
-        frame = ttk.LabelFrame(parent, text="Buscar SKU")
-        frame.grid(row=0, column=0, sticky=tk.EW, padx=5, pady=5)
-        self.search_entry = ttk.Entry(frame)
-        self.search_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(5,0))
-        ttk.Button(frame, text="Buscar", command=self._search_sku).pack(side=tk.LEFT, padx=5)
 
     def _build_registration_section(self, parent):
         frame = ttk.LabelFrame(parent, text="Registrar Producto")
         frame.grid(row=0, column=1, sticky=tk.EW, padx=5, pady=5)
-        ttk.Label(frame, text="SKU:").grid(row=0, column=0, sticky=tk.W)
-        self.sku_entry = ttk.Entry(frame)
-        self.sku_entry.grid(row=0, column=1, padx=5, pady=2)
-        ttk.Label(frame, text="Stock:").grid(row=1, column=0, sticky=tk.W)
-        self.stock_entry = ttk.Entry(frame)
-        self.stock_entry.grid(row=1, column=1, padx=5, pady=2)
-        ttk.Button(frame, text="Agregar Stock", command=self._add_stock).grid(row=2, columnspan=2, pady=5)
+
+        ttk.Label(frame, text="Producto:").grid(row=0, column=0, sticky=tk.W)
+        self.product_combo = ttk.Combobox(frame, state="readonly")
+        self.product_combo.grid(row=0, column=1, padx=5, pady=2, sticky=tk.EW)
+
+        ttk.Label(frame, text="Cantidad:").grid(row=1, column=0, sticky=tk.W)
+        self.stock_entry = ttk.Spinbox(frame, from_=1, to=100000)
+        self.stock_entry.grid(row=1, column=1, padx=5, pady=2, sticky=tk.EW)
+
+        ttk.Label(frame, text="Costo Unitario (CLP):").grid(row=2, column=0, sticky=tk.W)
+        self.cost_entry = ttk.Entry(frame)
+        self.cost_entry.grid(row=2, column=1, padx=5, pady=2, sticky=tk.EW)
+
+        ttk.Button(frame, text="Agregar Stock", command=self._add_stock).grid(row=3, columnspan=2, pady=5)
+        frame.columnconfigure(1, weight=1)
+
+        # Carga de productos base en combo
+        self._load_product_list()
+
+    def _build_search_section(self, parent):
+        search_frame = ttk.Frame(parent)
+        search_frame.grid(row=0, column=0, sticky=tk.EW, padx=5, pady=5)
+
+        ttk.Label(search_frame, text="Buscar SKU:").pack(side=tk.LEFT)
+        self.search_entry = ttk.Entry(search_frame)
+        self.search_entry.pack(side=tk.LEFT, padx=5)
+        ttk.Button(search_frame, text="Buscar", command=self._search_sku).pack(side=tk.LEFT)
+        ttk.Button(search_frame, text='Limpiar', command=self._refresh_inventory).pack(side=tk.LEFT, padx=5)
+
+    def _load_product_list(self):
+        with self.service.db.get_cursor() as cur:
+            cur.execute("SELECT codigo_base FROM productos")
+            bases = [row['codigo_base'] for row in cur.fetchall()]
+        self.product_combo['values'] = bases
+        if bases:
+            self.product_combo.current(0)
+
+    def _add_stock(self):
+        base = self.product_combo.get().strip()
+        if not base:
+            return messagebox.showerror("Error", "Selecciona un producto")
+        try:
+            qty = int(self.stock_entry.get())
+            cost = float(self.cost_entry.get())
+        except ValueError as e:
+            return messagebox.showerror("Error", "Cantidad/ costo inválidos")
+
+        try:
+            # Operación de base de datos
+            self.service.registrar_lote_con_sku_auto(base, qty, cost)
+            self._refresh_inventory()
+            messagebox.showinfo("Éxito", f"Lote agregado para {base}")
+        except psycopg.DatabaseError as e:
+            logger.error(f"Error BD: {str(e)}")
+            messagebox.showerror("Error", "Fallo en base de datos")
+        except Exception as e:
+            logger.critical(f"Error crítico: {str(e)}")
+            messagebox.showerror("Error", "Fallo interno")
+
+    def _consume_stock(self):
+        selected = self.tree.selection()
+        if not selected:
+            messagebox.showwarning("Error", "Selecciona un SKU de la tabla")
+            return
+
+        sku = self.tree.item(selected[0])['values'][0]
+
+        try:
+            cantidad = int(self.consume_spin.get())
+            if cantidad <= 0:
+                raise ValueError
+        except (ValueError, psycopg.DatabaseError) as e:
+            messagebox.showerror("Error de Sistema", f"Error controlado: {str(e)}")
+        except Exception as e:
+            messagebox.showerror("Error Crítico", "Error no controlado, contacte al administrador")
+            logger.error(f"Error no controlado: {str(e)}")
+            return
+
+        try:
+            with self.service.db.get_cursor() as cur:
+                cur.execute("""
+                    INSERT INTO movimientos (lote_id, tipo_movimiento, cantidad)
+                    SELECT id, 'SALIDA', %s
+                    FROM lotes
+                    WHERE sku = %s
+                    ORDER BY fecha_ingreso
+                    LIMIT 1
+                """, (cantidad, sku))
+
+            self._refresh_inventory()
+            messagebox.showinfo("Exito", f"Consumidas {cantidad} unidades del SKU {sku}")
+
+        except (ValueError, psycopg.DatabaseError) as e:
+            messagebox.showerror("Error de Sistema", f"Error controlado: {str(e)}")
+        except Exception as e:
+            messagebox.showerror("Error Crítico", "Error no controlado, contacte al administrador")
+            logger.error(f"Error no controlado: {str(e)}")
 
     def _build_consumption_section(self, parent):
         frame = ttk.LabelFrame(parent, text="Consumo de Inventario")
@@ -85,9 +177,9 @@ class MainWindow(tk.Tk):
         ttk.Button(frame, text="Consumir Stock", command=self._consume_stock).grid(row=1, columnspan=2, pady=5)
 
     def _build_inventory_table(self, parent):
-        columns = ("SKU", "Stock", "Costo Promedio")
-        self.tree = ttk.Treeview(parent, columns=columns, show="headings")
-        for col in columns:
+        cols = ("SKU", "Stock", "Costo Promedio")
+        self.tree = ttk.Treeview(parent, columns=cols, show="headings")
+        for col in cols:
             self.tree.heading(col, text=col)
         scrollbar = ttk.Scrollbar(parent, orient=tk.VERTICAL, command=self.tree.yview)
         self.tree.configure(yscrollcommand=scrollbar.set)
@@ -95,13 +187,16 @@ class MainWindow(tk.Tk):
         scrollbar.grid(row=2, column=2, sticky=tk.NS)
 
     def _refresh_inventory(self):
-        """Refresca los datos en la tabla de inventario"""
-        # Ejemplo de implementación básica
         try:
             data = self.service.list_inventory()
-        except Exception:
-            messagebox.showerror("Error", "No se pudo cargar el inventario")
+        except (psycopg.DatabaseError, ValueError) as e:
+            messagebox.showerror("Error de Sistema", f"Error al cargar inventario: {str(e)}")
             return
+        except Exception as e:
+            messagebox.showerror("Error Crítico", "Error no controlado, contacte al administrador")
+            logger.error(f"Error no controlado en inventario: {str(e)}")
+            return
+
         self.tree.delete(*self.tree.get_children())
         for item in data:
             self.tree.insert('', tk.END, values=(item.sku, item.stock, item.average_cost))
@@ -115,47 +210,37 @@ class MainWindow(tk.Tk):
                 return
         messagebox.showinfo("Búsqueda", "SKU no encontrado")
 
-    def _add_stock(self):
-        sku = self.sku_entry.get().strip()
-        try:
-            qty = int(self.stock_entry.get().strip())
-            self.service.add_stock(sku, qty)
-            self._refresh_inventory()
-            messagebox.showinfo("Éxito", f"Stock agregado a {sku}")
-        except Exception as e:
-            messagebox.showerror("Error", str(e))
-
-    def _consume_stock(self):
-        sku = self.sku_entry.get().strip()
-        try:
-            qty = int(self.consume_spin.get())
-            self.service.consume_stock(sku, qty)
-            self._refresh_inventory()
-            messagebox.showinfo("Éxito", f"Stock consumido de {sku}")
-        except Exception as e:
-            messagebox.showerror("Error", str(e))
-
     def _generate_excel(self):
-        sku = self.sku_entry.get().strip()
+        sku = simpledialog.askstring("Generar Excel", "Ingresa el SKU:")
+        if not sku:
+            return
         try:
             report_data = self.service.generar_reporte_sii(sku)
             excel_data = ReportExporter.to_excel(report_data)
             with open(f"reporte_{sku}.xlsx", "wb") as f:
                 f.write(excel_data)
             messagebox.showinfo("Éxito", f"Reporte Excel generado: reporte_{sku}.xlsx")
+        except (ValueError, psycopg.DatabaseError) as e:
+            messagebox.showerror("Erro de Sistema", f"Error controlado: {str(e)}")
         except Exception as e:
-            messagebox.showerror("Error", str(e))
+            messagebox.showerror("Error Critico", "Error no controlado, contacte al administrador")
+            logger.error(f"Error no controlado: {str(e)}")
 
     def _generate_pdf(self):
-        sku = self.sku_entry.get().strip()
+        sku = simpledialog.askstring("Generar PDF", "Ingresa el SKU:")
+        if not sku:
+            return
         try:
             report_data = self.service.generar_reporte_sii(sku)
             pdf_data = ReportExporter.to_pdf(report_data)
             with open(f"reporte_{sku}.pdf", "wb") as f:
                 f.write(pdf_data)
             messagebox.showinfo("Éxito", f"Reporte PDF generado: reporte_{sku}.pdf")
+        except (ValueError, psycopg.DatabaseError) as e:
+            messagebox.showerror("Error de Sistema", f"Error controlado: {str(e)}")
         except Exception as e:
-            messagebox.showerror("Error", str(e))
+            messagebox.showerror("Error Crítico", "Error no controlado, contacte al administrador")
+            logger.error(f"Error no controlado: {str(e)}")
 
     def _add_user_menu(self, role):
         if role == 'admin':
@@ -164,8 +249,24 @@ class MainWindow(tk.Tk):
             self.menubar.add_cascade(label="Administración", menu=admin_menu)
 
     def _manage_users(self):
-        messagebox.showinfo("Usuarios", "Funcionalidad de gestión de usuarios pendiente")
+        from presentation.desktop.user_manager import UserManagerWindow
+        win = UserManagerWindow(self)
+        win.grab_set()
+
+    def _open_product_manager(self):
+        """Abre la ventana de gestión de productos y actualiza la lista"""
+        try:
+            mgr = ProductManagerWindow(self)
+            mgr.grab_set()
+            self.wait_window(mgr)
+            self._load_product_list()
+            self._refresh_inventory()
+        except (ValueError, psycopg.DatabaseError) as e:
+            messagebox.showerror("Error de Sistema", f"Error controlado: {str(e)}")
+        except Exception as e:
+            messagebox.showerror("Error Crítico", "Error no controlado, contacte al administrador")
+            logger.error(f"Error no controlado: {str(e)}")
+
 
 if __name__ == "__main__":
-    app = MainWindow()
-    app.mainloop()
+    MainWindow().mainloop()

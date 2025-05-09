@@ -1,10 +1,12 @@
 from typing import Dict
 from datetime import datetime
 from functools import lru_cache
+from core.logger_config import logger
+from core.application.sku_generator import SKUGenerator
 from core.domain.inventory import LoteSII, MovimientoInventario
 from core.infrastructure.security.security_manager import SecurityManager
 from core.infrastructure.database.postgres_manager import DatabaseManager
-from core.application.sku_generator import SKUGenerator
+
 
 class InventoryService:
     def __init__(self):
@@ -150,3 +152,17 @@ class InventoryService:
         """
         nuevo_sku = self.sku_generator.generar_sku(base_sku)
         return self.add_batch(nuevo_sku, quantity, unit_cost, doc)
+
+    def list_inventory(self):
+        with self.db.get_cursor() as cur:
+            cur.execute("""
+                SELECT
+                    p.codigo_base as sku_base,
+                    1.sku,
+                    SUM(l.cantidad) as stock,
+                    ROUND(AVG(L.costo_unitario), 2) as costo_promedio
+                FROM lotes l
+                JOIN productos p ON l.producto_id = p.id
+                GROUP BY p.codigo_base, l.sku
+            """)
+            return cur.fetchall()
