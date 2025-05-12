@@ -1,11 +1,13 @@
-import tkinter as tk
-from tkinter import ttk, messagebox, simpledialog
+import os
 import psycopg
+import tkinter as tk
 from core.logger_config import logger
+from tkinter import ttk, messagebox, simpledialog
 from core.application.report_exporter import ReportExporter
 from core.application.inventory_service import InventoryService
 from presentation.desktop.product_manager import ProductManagerWindow
 from presentation.desktop.mvp_window_check_list import MVPChecklistWindow
+
 
 class MainWindow(tk.Tk):
     def __init__(self, user_role='operador'):
@@ -22,31 +24,53 @@ class MainWindow(tk.Tk):
 
         # Carga inicial de datos y menú de usuario
         self._refresh_inventory()
-        self._add_user_menu(user_role)
 
     def _build_menu(self):
         self.menubar = tk.Menu(self)
+
+        # Menú Archivo
         file_menu = tk.Menu(self.menubar, tearoff=0)
         file_menu.add_command(label="Salir", command=self.destroy)
         self.menubar.add_cascade(label="Archivo", menu=file_menu)
 
+        # Menú Acciones
         actions_menu = tk.Menu(self.menubar, tearoff=0)
         actions_menu.add_command(label="Actualizar", command=self._refresh_inventory)
         self.menubar.add_cascade(label="Acciones", menu=actions_menu)
 
+        # Menú Reportes
         reports_menu = tk.Menu(self.menubar, tearoff=0)
         reports_menu.add_command(label="Generar Excel", command=self._generate_excel)
         reports_menu.add_command(label="Generar PDF", command=self._generate_pdf)
         self.menubar.add_cascade(label="Reportes", menu=reports_menu)
 
-        # Menú productos
+        # Menú Productos
         prod_menu = tk.Menu(self.menubar, tearoff=0)
-        self.menubar.add_cascade(label="Productos", menu=prod_menu)
-
         if self.user_role == 'admin':
             prod_menu.add_command(label="Gestionar Productos...", command=self._open_product_manager)
-        else:
-            prod_menu.add_command(label="Productos", state=tk.DISABLED)
+        self.menubar.add_cascade(label="Productos", menu=prod_menu)
+
+        # Menú Administración
+        admin_menu = tk.Menu(self.menubar, tearoff=0)
+        if self.user_role == 'admin':
+            admin_menu.add_command(label="Gestión de Usuarios", command=self._manage_users)
+        self.menubar.add_cascade(label="Administración", menu=admin_menu)
+
+        # Menú MVP (visible para todos)
+        mvp_menu = tk.Menu(self.menubar, tearoff=0)
+        mvp_menu.add_command(label="Ver Avance MVP", command=self._show_mvp_checklist)
+        self.menubar.add_cascade(label="MVP", menu=mvp_menu)
+
+        self.config(menu=self.menubar)
+
+    def _open_system_config(self):
+        """Abre la ventana de configuración del sistema"""
+        self._show_mvp_checklist()
+
+    def _show_mvp_checklist(self):
+        """Muestra la ventana de checklist MVP"""
+        checklist = MVPChecklistWindow(self)
+        checklist.grab_set()
 
     def _build_ui(self):
         main_container = ttk.Frame(self)
@@ -100,8 +124,9 @@ class MainWindow(tk.Tk):
         ttk.Button(search_frame, text='Limpiar', command=self._refresh_inventory).pack(side=tk.LEFT, padx=5)
 
     def _load_product_list(self):
+        """Carga la lista de productos usando SKU"""
         with self.service.db.get_cursor() as cur:
-            cur.execute("SELECT codigo_base FROM productos")
+            cur.execute("SELECT sku FROM productos")
             bases = [row['codigo_base'] for row in cur.fetchall()]
         self.product_combo['values'] = bases
         if bases:
@@ -115,7 +140,7 @@ class MainWindow(tk.Tk):
             qty = int(self.stock_entry.get())
             cost = float(self.cost_entry.get())
         except ValueError as e:
-            return messagebox.showerror("Error", "Cantidad/ costo inválidos")
+            return messagebox.showerror(f"Error {e}", "Cantidad/ costo inválidos")
 
         try:
             # Operación de base de datos
@@ -136,10 +161,11 @@ class MainWindow(tk.Tk):
             return
 
         sku = self.tree.item(selected[0])['values'][0]
+        self.cantidad = 0
 
         try:
-            cantidad = int(self.consume_spin.get())
-            if cantidad <= 0:
+            self.cantidad = int(self.consume_spin.get())
+            if self.cantidad <= 0:
                 raise ValueError
         except (ValueError, psycopg.DatabaseError) as e:
             messagebox.showerror("Error de Sistema", f"Error controlado: {str(e)}")
@@ -157,10 +183,10 @@ class MainWindow(tk.Tk):
                     WHERE sku = %s
                     ORDER BY fecha_ingreso
                     LIMIT 1
-                """, (cantidad, sku))
+                """, (self.cantidad, sku))
 
             self._refresh_inventory()
-            messagebox.showinfo("Exito", f"Consumidas {cantidad} unidades del SKU {sku}")
+            messagebox.showinfo("Exito", f"Consumidas {self.cantidad} unidades del SKU {sku}")
 
         except (ValueError, psycopg.DatabaseError) as e:
             messagebox.showerror("Error de Sistema", f"Error controlado: {str(e)}")
@@ -266,6 +292,13 @@ class MainWindow(tk.Tk):
         except Exception as e:
             messagebox.showerror("Error Crítico", "Error no controlado, contacte al administrador")
             logger.error(f"Error no controlado: {str(e)}")
+
+    def _show_mvp_checklist(self):
+        """Muesta la ventana de checklist Mvp solo en desarrolo"""
+        if self.is_development:
+            checklist = MVPChecklistWindow(self)
+            checklist.grab_set()
+
 
 
 if __name__ == "__main__":

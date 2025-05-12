@@ -78,7 +78,7 @@ class DatabaseManager:
                     material VARCHAR(50),
                     grosor_mm NUMERIC(5,2),
                     color VARCHAR(50),
-                    descripcion TEXT
+                    descripcion TEXT,
                     activo BOOLEAN NOT NULL DEFAULT TRUE
                 );
 

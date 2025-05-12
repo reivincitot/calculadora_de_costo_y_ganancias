@@ -1,12 +1,14 @@
 annotated-types==0.7.0
 asn1crypto==1.5.1
 cffi==1.17.1
+chardet==5.2.0
 colorama==0.4.6
 cryptography==44.0.2
 loguru==0.7.3
 lxml==5.2.1
 numpy==2.2.5
 pandas==2.2.3
+pillow==11.2.1
 psycopg==3.2.6
 psycopg-binary==3.2.6
 pycparser==2.22
@@ -15,9 +17,12 @@ pydantic_core==2.33.1
 python-dateutil==2.9.0.post0
 python-dotenv==1.1.0
 pytz==2025.2
+reportlab==4.4.0
 setuptools==80.0.0
 six==1.17.0
 typing-inspection==0.4.0
 typing_extensions==4.13.2
 tzdata==2025.2
+Unidecode==1.4.0
 win32_setctime==1.2.0
+XlsxWriter==3.2.3

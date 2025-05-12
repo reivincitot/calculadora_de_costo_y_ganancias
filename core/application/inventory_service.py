@@ -1,7 +1,6 @@
 from typing import Dict
 from datetime import datetime
 from functools import lru_cache
-from core.logger_config import logger
 from core.application.sku_generator import SKUGenerator
 from core.domain.inventory import LoteSII, MovimientoInventario
 from core.infrastructure.security.security_manager import SecurityManager
@@ -150,19 +149,45 @@ class InventoryService:
         """
         Registra un nuevo lote generando automáticamente el SKU basado en una base (por ejemplo, 'MAT-ALU02').
         """
-        nuevo_sku = self.sku_generator.generar_sku(base_sku)
-        return self.add_batch(nuevo_sku, quantity, unit_cost, doc)
+        with self.db.get_cursor() as cur:
+            # Obtener ID del producto base (corregido typo en SELECT)
+            cur.execute("SELECT id FROM productos WHERE codigo_base = %s", (base_sku,))
+            producto = cur.fetchone()
+            if not producto:
+                raise ValueError(f"Producto base {base_sku} no existe")
+
+            nuevo_sku = self.sku_generator.generar_sku(base_sku)
+
+            # Insertar con referencia al producto (corregido nombre de tabla)
+            cur.execute("""
+                INSERT INTO lotes (sku, cantidad, costo_unitario, documento_asociado, producto_id)
+                VALUES (%s, %s, %s, %s, %s)
+                RETURNING id, sku, cantidad, costo_unitario, fecha_ingreso, documento_asociado
+            """, (nuevo_sku, quantity, unit_cost, doc, producto['id']))
+
+            lote_data = cur.fetchone()
+            lote = LoteSII(
+                id=lote_data['id'],
+                sku=lote_data['sku'],
+                cantidad=lote_data['cantidad'],
+                costo_unitario=lote_data['costo_unitario'],
+                fecha_ingreso=lote_data['fecha_ingreso'],
+                documento_relacionado=lote_data['documento_asociado']
+            )
+
+            self._registrar_movimiento_db(cur, lote.id, 'ENTRADA', quantity)
+            return lote  # <-- ¡Faltaba este retorno!
 
     def list_inventory(self):
+        """Obtiene inventario agrupado por SKU con costo promedio"""
         with self.db.get_cursor() as cur:
             cur.execute("""
                 SELECT
-                    p.codigo_base as sku_base,
-                    1.sku,
-                    SUM(l.cantidad) as stock,
-                    ROUND(AVG(L.costo_unitario), 2) as costo_promedio
-                FROM lotes l
-                JOIN productos p ON l.producto_id = p.id
-                GROUP BY p.codigo_base, l.sku
+                    sku,
+                    SUM(cantidad) as stock,
+                    ROUND(AVG(costo_unitario), 2) as average_cost
+                FROM lotes
+                GROUP BY sku
+                ORDER BY sku
             """)
             return cur.fetchall()
