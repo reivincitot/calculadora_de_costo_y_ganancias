@@ -1,0 +1,163 @@
+Estoy desarrollando una aplicación de escritorio en Python tipo ERP modular para una empresa de grabado láser en Chile. Esta app se conecta a una base de datos PostgreSQL, tiene interfaz con Tkinter, y estructura basada en capas limpias. Su objetivo es centralizar operaciones: inventario, costos, reportes, usuarios, y análisis de datos.
+Además, desde el inicio debe estar orientada a pruebas (test-driven) y tener un MVP funcional bien definido.
+
+🎯 MVP (Producto Mínimo Viable)
+Desde el día 1 debe desarrollarse con base en este MVP funcional, que estará integrado como ventana dentro de la aplicación con botones de progreso, para marcar automáticamente el avance según los tests que se aprueben.
+
+El MVP debe incluir lo siguiente:
+
+Módulo	Requisito mínimo
+Autenticación	Inicio de sesión, validación de rol (admin, operador)
+Inventario	Agregar producto con código generado automáticamente
+Registro de lotes	Ingreso con SKU secuencial, cantidades, costos
+Cálculo de costos	Costo unitario a partir de datos reales (material, electricidad)
+Cálculo de precio	Precio sugerido con margen editable
+Reporte simple	Exportar un Excel con los productos cargados
+Test automáticos	Al menos 1 test por cada caso de uso del MVP
+MVP Dashboard	Ventana de seguimiento con progreso y botones por cada parte
+
+🧪 Ventana de Progreso del MVP
+Debe incluirse una ventana de desarrollo interno, accesible solo en modo debug o dev, con una checklist visual de todos los puntos del MVP. Cada ítem se marcará automáticamente como completado una vez que el test automático correspondiente pase.
+
+Ejemplo de vista:
+
+css
+Copiar
+Editar
+[✓] Login funcional
+[✓] Registro de producto con código automático
+[✓] Registro de lote con SKU
+[ ] Cálculo de costo
+[ ] Precio sugerido
+[ ] Reporte Excel simple
+[✓] Tests funcionando
+[ ] Exportación SII-ready
+Cada test aprobado por pytest debe ejecutar una función que actualice este estado (update_mvp_status()).
+
+Esta ventana se mantiene visible hasta que el MVP esté 100% completo.
+
+Debe guardarse estado en base de datos o archivo local para persistencia.
+
+🔐 Autenticación y Seguridad
+Login de usuarios, roles (admin, operador).
+
+Contraseñas encriptadas con bcrypt.
+
+Registro de accesos con fecha/hora y usuario.
+
+Gestión de usuarios desde la UI (solo para admin).
+
+📦 Gestión de Productos e Inventario
+Código generado automáticamente:
+
+php-template
+Copiar
+Editar
+Formato: <tipo>-<material>-<color>-<grosor>
+Ejemplo: MAT-ALU-NEGRO-02
+Registro de lotes:
+
+makefile
+Copiar
+Editar
+SKU automático: <codigo_producto>-XXXX (secuencial)
+Ej: MAT-ALU-NEGRO-02-0001
+Manejo FIFO para salidas de inventario.
+
+Alerta por stock bajo configurable.
+
+🧮 Cálculo de Costos y Precio
+Costos: materiales, electricidad, embalaje, despacho.
+
+Precio sugerido basado en margen deseado o % fijo.
+
+Simulador de precio con controles deslizantes para margen.
+
+Historial de precios con fecha, valor anterior y nuevo.
+
+📄 Reportes (Formato SII)
+Reportes en Excel y PDF con formato formal SII Chile:
+
+Columnas requeridas
+
+Totales en CLP
+
+RUT, razón social, fecha, numeración
+
+Barra de progreso (tk.Toplevel + Progressbar) al generar.
+
+Simulación de envío al SII con mensaje visual.
+
+📊 Dashboard de Gerencia
+Vista solo para admin o gerente.
+
+Muestra:
+
+Ventas mensuales
+
+Productos más vendidos
+
+Rentabilidad media
+
+Stock crítico
+
+Gráficos generados con R mediante rpy2.
+
+Filtros por fecha, producto o cliente.
+
+✅ Checklist de Producción
+Checklist por producto/pedido (UI tipo “To-do”)
+
+Ítems como: diseño aprobado, grabado, empaque, despacho.
+
+Cambia estado del pedido a "completado" automáticamente.
+
+🧪 Testing Obligatorio
+Cada módulo debe tener su archivo de test con pytest.
+
+Tests automáticos para:
+
+Autenticación
+
+Cálculo de costos
+
+Generación de código/sku
+
+Reportes
+
+Al correr los tests, si pasan, se actualiza el estado del MVP en la ventana.
+
+Se deben correr al menos antes de cada entrega o checkpoint.
+
+⚙️ Configuración
+Archivo .env para parámetros sensibles.
+
+Configuración desde UI:
+
+Margen por defecto
+
+Umbral de stock bajo
+
+Carpeta de exportación
+
+Moneda y formato numérico
+
+📁 Estructura del Proyecto
+bash
+Copiar
+Editar
+calculadora_de_costo_y_ganancias/
+├── core/
+│   ├── dominio/
+│   ├── infraestructura/
+│   └── aplicacion/
+├── presentacion/
+│   ├── desktop/
+│   │   └── ventanas/           # Login, Inventario, Costos, Reportes, MVP
+│   └── web/                    # (opcional futuro)
+├── reportes/
+├── analisis/                   # scripts .R usados por rpy2
+├── pruebas/                    # tests automáticos
+├── tests/                      # tests MVP y smoke tests
+├── requirements.txt
+└── README.md
