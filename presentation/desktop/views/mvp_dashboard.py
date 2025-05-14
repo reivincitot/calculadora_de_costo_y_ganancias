@@ -14,15 +14,14 @@ class MVPDashboard(tk.Toplevel):
         self.title("Seguimiento MVP - ISO 9001")
         self.geometry("600x400")
 
+        self.tree = ttk.Treeview(self, columns=('componente', 'estado'), show='headings')
+        self.tree.heading('componente', text='Componente MVP')
+        self.tree.heading('estado', text='Estado')
+        self.tree.pack(expand=True, fill=tk.BOTH)
 
-        self.tree = ttk.Treeview(self, columns=('status'), show='headings')
-        self.tree.heading('#0', textr='Componente MVP')
-        self.tree.heading('status', text='Estado')
 
-        for item in self.mvp_service.obtener_items():
-            status = '✓' if item.completado else '✗'
-
-            self.tree.pack(expand=True, fill=tk.BOTH)
 
     def _update_status(self):
-        self.mvp_service.actualizar_estado()
+        for item in self.mvp_service.obtener_items():
+            estado = '✓' if item.completado else '✗'
+            self.tree.insert('', 'end', values=(item.nombre, estado))

@@ -1,23 +1,8 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=42"]
 build-backend = "setuptools.build_meta"
 
-[tool.black]
-line-length = 120
-target-version = ['py312']
-include = '\.pyi?$'
-exclude = '''
-/(
-    \.git
-  | \.venv
-  | build
-  | dist
-)/
-'''
-
-[tool.pylint]
-master.disable = [
-  "C0114",  # missing-module-docstring
-  "C0115",  # missing-class-docstring
-  "C0116"   # missing-function-docstring
-]
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "--import-mode=importlib"

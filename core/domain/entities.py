@@ -8,5 +8,3 @@ class Usuario(BaseModel):
     rol: str
     hashed_password: str
     activo: bool = True
-
-    

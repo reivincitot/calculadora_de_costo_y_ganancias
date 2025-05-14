@@ -1,10 +1,13 @@
 import os
+import logging
+from pathlib import Path
 from dotenv import load_dotenv
 from utils.logger import AuditLogger
 from psycopg_pool import ConnectionPool
 
 
-load_dotenv()
+logging.getLogger("psycopg.pool").setLevel(logging.ERROR)
+load_dotenv(dotenv_path=Path(__file__).resolve().parents[2] / '.env')
 
 
 class Database:
@@ -17,7 +20,7 @@ class Database:
                 conninfo=f"""
                 dbname={os.getenv('DB_NAME')}
                 user={os.getenv('DB_USER')}
-                password={os.getenv('DB_HOST')}
+                password={os.getenv('DB_PASSWORD')}
                 host={os.getenv('DB_HOST')}
                 port={os.getenv('DB_PORT')}
             """,

@@ -1,4 +1,3 @@
-# utils/logger.py
 import logging
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -6,7 +5,6 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv()
-
 
 class AuditLogger:
     _instance = None
@@ -28,8 +26,8 @@ class AuditLogger:
         )
 
         # Handler para archivo rotativo (ISO 27001 - Conservación)
-        logs_dir = Path(__file__).parent.parent / "logs"
-        logs_dir.mkdir(exist_ok=True, parents=True)
+        logs_dir = Path("logs")
+        logs_dir.mkdir(exist_ok=True)
 
         file_handler = RotatingFileHandler(
             filename=logs_dir / "audit_erp.log",
@@ -48,5 +46,10 @@ class AuditLogger:
         self.logger.addHandler(file_handler)
 
     def log_event(self, level: str, user: str, event_type: str, details: str):
+        """Registra un evento con nivel, usuario, tipo de evento y detalles."""
         log_message = f"USER:{user}|EVENT:{event_type}|DETAILS:{details}"
-        getattr(self.logger, level.lower())(log_message)
+        # Convertir nivel (INFO, ERROR, etc.) a constante de logging
+        level_const = getattr(logging, level.upper(), logging.INFO)
+        # Obtener logger en cada llamada para permitir patch en tests
+        logger = logging.getLogger("ERP_Audit")
+        logger.log(level_const, log_message)
