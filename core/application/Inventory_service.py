@@ -3,10 +3,10 @@ from core.domain.inventory import InventoryMovement, InventoryBatch
 from core.infrastructure.security.security_manager import check_permission
 
 
-class inventoryService:
-    def __init__(self, user: str, repo: InventoryRepository):
+class InventoryService:
+    def __init__(self, user: str, repo=None):
         self.user = user
-        self.repo = repo
+        self.repo = repo or InventoryRepository()
 
     def add_batch(self, sku: str, quantity: int, unit_cost: float):
         check_permission(self.user, "add_batch")
@@ -18,35 +18,26 @@ class inventoryService:
             movement_type='IN',
             unit_cost=unit_cost
         ))
+        return batch
 
     def consume(self, sku: str, quantity: int):
         check_permission(self.user, "consume_stock")
-        batches = self.repo.get_batches_fifo(sku)
-        remaining= quantity
-        for batch in batches:
-            if batch.quantity >= remaining:
-                self.repo.update_batch_quantity(batch.id, batch.quantity - remaining)
-                self.repo.insert_movement(InventoryMovement(
-                    product_sku=sku,
-                    quantity=remaining,
-                    movement_type='OUT',
-                    unit_cost=batch.unit_cost,
-                    related_batch_id=batch.id
-                ))
-                return
-            else:
-                self.repo.update_batch_quantity(batch.id, 0)
-                self.repo.insert_movement(InventoryMovement(
-                    product_sku=sku,
-                    quantity=batch.quantity,
-                    movement_type='OUT',
-                    unit_cost=batch.unit_cost,
-                    related_batch_id=batch.id
-                ))
-                remaining -= batch.quantity
-
-            if remaining > 0:
-                raise ValueError(f"No hay suficiente stock para consumir {quantity} unidades de {sku}")
+        remaining = quantity
+        for batch in self.repo.get_batches_fifo(sku):
+            if remaining <= 0:
+                break
+            take = min(batch.quantity, remaining)
+            self.repo.update_batch_quantity(batch.id, batch.quantity - take)
+            self.repo.insert_movement(InventoryMovement(
+                product_sku=sku,
+                quantity=take,
+                movement_type='OUT',
+                unit_cost=batch.unit_cost,
+                related_batch_id=batch.id
+            ))
+            remaining -= take
+        if remaining > 0:
+            raise ValueError(f"No hay suficiente stock para consumir {quantity} unidades de {sku}")
 
     def get_stock(self, sku: str) -> int:
         return self.repo.get_total_stock(sku)
