@@ -44,13 +44,13 @@ def test_consume_exact_and_partial(db_session):
     cost = crud.consume_stock(db_session, "SKU1", 4)
     assert cost == pytest.approx(10.0)
     # Stock remanente
-    remaining = db_session.query(models.Batch).get(b.id).quantity
+    remaining = db_session.get(models.Batch, b.id).quantity
     assert remaining == 6
 
     # Consumimos luego 6 => vacía lote
     cost2 = crud.consume_stock(db_session, "SKU1", 6)
     assert cost2 == pytest.approx(6 * 2.5)
-    assert db_session.query(models.Batch).get(b.id).quantity == 0
+    assert db_session.get(models.Batch, b.id).quantity == 0
 
 def test_consume_insufficient_raises(db_session):
     # Intentar consumir más de lo disponible

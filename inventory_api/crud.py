@@ -4,7 +4,7 @@ from sqlalchemy import select, update, delete
 from sqlalchemy.sql import func
 
 def create_batch(db: Session, batch_in: schemas.BatchCreate) -> models.Batch:
-    db_batch = models.Batch(**batch_in.dict())
+    db_batch = models.Batch(**batch_in.model_dump())
     db.add(db_batch)
     db.commit()
     db.refresh(db_batch)

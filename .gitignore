@@ -20,4 +20,4 @@ __pycache__/
 # Archivos generados
 dist/
 build/
-
+.pytest_cache
