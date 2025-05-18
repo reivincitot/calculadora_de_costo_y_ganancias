@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from . import models, schemas
 from sqlalchemy import select, update, delete
 from sqlalchemy.sql import func
+from .models import Costos
 
 def create_batch(db: Session, batch_in: schemas.BatchCreate) -> models.Batch:
     db_batch = models.Batch(**batch_in.model_dump())
@@ -57,3 +58,11 @@ def get_stock_value(db: Session, sku: str) -> float:
         models.Batch.quantity * models.Batch.unit_cost
     ), 0.0)).filter(models.Batch.sku == sku).scalar()
     return float(res)
+
+def get_precio_sugerido(db: Session, sku: str) -> schemas.PrecioSugeridoOut:
+    costo = db.query(models.Costos).filter(models.Costos.sku == sku).first()
+    if not costo:
+        raise KeyError(f"Costo no encontrado para SKU {sku}")
+    factor = 1.3  # ejemplo de margen del 30%
+    precio = float(costo.monto) * factor
+    return schemas.PrecioSugeridoOut(sku=sku, precio_sugerido=precio)

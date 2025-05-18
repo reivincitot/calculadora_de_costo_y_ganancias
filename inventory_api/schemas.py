@@ -1,4 +1,4 @@
-from pydantic import BaseModel, conint, confloat
+from pydantic import BaseModel, conint, confloat, ConfigDict
 from datetime import datetime
 
 class BatchCreate(BaseModel):
@@ -13,8 +13,7 @@ class Batch(BaseModel):
     unit_cost: float
     created_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class Movement(BaseModel):
     id: int
@@ -24,5 +23,10 @@ class Movement(BaseModel):
     unit_cost: float
     created_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
+
+class PrecioSugeridoOut(BaseModel):
+    sku: str
+    precio_sugerido: float
+
+    model_config = ConfigDict(from_attributes=True)
