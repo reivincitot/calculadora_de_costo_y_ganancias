@@ -18,5 +18,6 @@ class CostoRead(CostoCreate):
 
 class PrecioSugerido(BaseModel):
     sku: str
-    precio_sugerido: Decimal = Decimal
-    
+    precio_sugerido: Decimal
+
+    model_config = {"json_schema_extra": {"example": {"sku": "SKU-123", "precio_sugerido": 123.45}}}

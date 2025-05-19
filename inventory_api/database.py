@@ -1,26 +1,20 @@
-import os
 from typing import Generator
-from dotenv import load_dotenv
 from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import Session, sessionmaker, declarative_base
+from shared.config import DATABASE_URL
 
 
-load_dotenv()
+engine = create_engine(DATABASE_URL, echo=False, future=True)
 
-
-DATABASE_URL = (
-    f"postgresql+psycopg://{os.getenv('DB_USER')}:"
-    f"{os.getenv('DB_PASSWORD')}@{os.getenv('DB_HOST')}:"
-    f"{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}"
-)
-
-engine = create_engine(DATABASE_URL, echo=False)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
 Base = declarative_base()
 
-
 def get_db() -> Generator[Session, None, None]:
+    """
+    Fixture de dependencia para FastAPI.
+    Abre una sesión, la cede, y se asegura de cerrarla al terminar.
+    """
     db = SessionLocal()
     try:
         yield db

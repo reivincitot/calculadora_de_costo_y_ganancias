@@ -1,6 +1,8 @@
 import pytest
-from inventory_api.main import app
 from fastapi.testclient import TestClient
+from costos_api.main import app
+from costos_api.database import init_db, engine, SessionLocal
+from costos_api.models import Costos
 
 
 client = TestClient(app)
@@ -24,3 +26,21 @@ def test_precio_sugerido_endpoint_existente(tmp_path, monkeypatch):
 def test_precio_sugerido_no_existente():
     resp = client.get("/costos/precio-sugerido/NOEXISTE")
     assert resp.status_code == 404
+
+@pytest.fixture(autouse=True)
+def prepare_db():
+    init_db()
+    # limpiar
+    with SessionLocal() as db:
+        db.query(Costos).delete()
+        db.commit()
+    yield
+def test_precio_sugerido_flow():
+    # Creo un costo
+    client.post("/costos/", json={"sku":"XYZ","concepto":"C1","monto":50.0})
+    # Consulto precio sugerido
+    resp = client.get("/costos/precio-sugerido/XYZ")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["sku"] == "XYZ"
+    assert data["precio_sugerido"] == pytest.approx(65.0)
