@@ -8,3 +8,5 @@ python-barcode
 XlsxWriter
 reportlab
 httpx
+python-jose[cryptography]
+passlib[bcrypt]
