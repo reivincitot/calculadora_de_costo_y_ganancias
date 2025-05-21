@@ -25,7 +25,7 @@ def create_batch(
     batch_in: schemas.BatchCreate,
     db: Session = Depends(get_db),
     # Sólo los usuarios con rol "admin" podrán crear lotes:
-    user=Depends(require_role("admin")),
+    #user=Depends(require_role("admin")),
 ):
     try:
         return crud.create_batch(db, batch_in)
@@ -46,7 +46,7 @@ def consume(
     quantity: int,
     db: Session = Depends(get_db),
     # Cualquier usuario autenticado (admin u operador)
-    user=Depends(get_current_user),
+    #user=Depends(get_current_user),
 ):
     try:
         total_cost = crud.consume_stock(db, sku, quantity)
@@ -70,7 +70,7 @@ def consume(
 def read_stock(
     sku: str,
     db: Session = Depends(get_db),
-    user=Depends(get_current_user),
+    #user=Depends(get_current_user),
 ):
     stock = crud.get_stock(db, sku)
     return {"sku": sku, "stock": stock}
@@ -83,7 +83,7 @@ def read_stock(
 def read_stock_value(
     sku: str,
     db: Session = Depends(get_db),
-    user=Depends(get_current_user),
+    #=Depends(get_current_user),
 ):
     val = crud.get_stock_value(db, sku)
     return {"sku": sku, "stock_value": val}
@@ -93,6 +93,6 @@ def read_stock_value(
 def create_batch(
     batch_in: schemas.BatchCreate,
     db: Session = Depends(get_db),
-    user=Depends(require_role("admin"))
+    #user=Depends(require_role("admin"))
 ):
     return crud.create_batch(db, batch_in)

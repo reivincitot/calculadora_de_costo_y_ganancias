@@ -12,6 +12,7 @@ os.environ["DB_PORT"] = "5432"
 from inventory_api.main import app
 from inventory_api.database import engine, Base, SessionLocal
 
+
 @pytest.fixture(scope="module", autouse=True)
 def setup_db():
     # Creamos tablas en la DB de testing
@@ -20,9 +21,11 @@ def setup_db():
     yield
     Base.metadata.drop_all(bind=engine)
 
+
 @pytest.fixture
 def client():
     return TestClient(app)
+
 
 def test_create_batch_endpoint(client):
     payload = {"sku": "ENDPT1", "quantity": 7, "unit_cost": 3.14}
@@ -33,6 +36,7 @@ def test_create_batch_endpoint(client):
     assert data["quantity"] == 7
     assert resp.json()["id"] is not None
 
+
 def test_read_stock_and_value(client):
     # Ya existe ENDPT1 con 7 uds a 3.14
     r1 = client.get("/inventory/stock/ENDPT1")
@@ -41,6 +45,7 @@ def test_read_stock_and_value(client):
     r2 = client.get("/inventory/stock_value/ENDPT1")
     assert r2.status_code == 200
     assert pytest.approx(r2.json()["stock_value"], rel=1e-6) == 7 * 3.14
+
 
 def test_consume_endpoint_success(client):
     # Consumimos 5 unidades
@@ -54,6 +59,7 @@ def test_consume_endpoint_success(client):
     # Ahora stock remanente = 2
     r = client.get("/inventory/stock/ENDPT1")
     assert r.json()["stock"] == 2
+
 
 def test_consume_endpoint_insufficient(client):
     # Intentamos consumir más de lo que queda
